@@ -78,6 +78,7 @@ RTC_DATA_ATTR int lastResetHour =
 // --- ÉTAT GLOBAL ---
 // ============================================================
 bool isDisplayOn = true;
+bool otaInProgress = false; // Flag pour suspendre les tâches pendant OTA
 
 // OPT#1 : Une seule variable lastCO2, globale, sans doublon dans displayUI()
 uint16_t lastCO2 = 0;
@@ -132,6 +133,7 @@ void setup() {
   tft.println(WIFI_SSID);
 
   WiFi.begin(WIFI_SSID, WIFI_PASS);
+  WiFi.setSleep(false); // Désactiver le mode veille WiFi pour l'OTA
   unsigned long startAttempt = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 15000) {
     delay(500);
@@ -171,30 +173,93 @@ void setup() {
     ArduinoOTA.setHostname("air-analyzer");
     ArduinoOTA.setPassword(OTA_PASSWORD); // Défini dans secrets.h
     ArduinoOTA.onStart([]() {
+      otaInProgress = true; // Bloquer toutes les autres tâches
       String type = (ArduinoOTA.getCommand() == U_FLASH) ? "sketch" : "filesystem";
       Serial.println("Début mise à jour OTA: " + type);
-      // Désactiver le watchdog pendant l'OTA pour éviter les resets
-      esp_task_wdt_delete(NULL);
+
+      // Arrêter toutes les activités non essentielles
+      esp_task_wdt_delete(NULL); // Désactiver le watchdog
+
+      // Déconnecter MQTT
+      if (mqttClient.connected()) {
+        mqttClient.disconnect();
+      }
+
+      // Arrêter le capteur SCD40
+      scd4x.stopPeriodicMeasurement();
+
+      // Éteindre l'écran pour économiser la mémoire/CPU
+      tft.fillScreen(ST77XX_BLACK);
+      tft.setCursor(20, 60);
+      tft.setTextSize(2);
+      tft.setTextColor(ST77XX_CYAN);
+      tft.println("MISE A JOUR OTA");
+      tft.setCursor(40, 90);
+      tft.setTextSize(1);
+      tft.println("Ne pas debrancher...");
+      ledcWrite(TFT_BL, 40); // Réduire le rétroéclairage
     });
     ArduinoOTA.onEnd([]() {
       Serial.println("\nMise à jour OTA terminée");
+      tft.fillScreen(ST77XX_BLACK);
+      tft.setCursor(40, 60);
+      tft.setTextSize(2);
+      tft.setTextColor(ST77XX_GREEN);
+      tft.println("MISE A JOUR OK");
+      tft.setCursor(30, 90);
+      tft.setTextSize(1);
+      tft.println("Redemarrage...");
+      delay(1000);
       // Le watchdog sera réinitialisé au redémarrage
     });
     ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-      Serial.printf("Progression: %u%%\r", (progress / (total / 100)));
+      unsigned int percent = (progress / (total / 100));
+      Serial.printf("Progression: %u%%\r", percent);
+
+      // Afficher la progression sur l'écran toutes les 10%
+      static unsigned int lastPercent = 0;
+      if (percent >= lastPercent + 10 || percent == 100) {
+        tft.fillRect(20, 110, 280, 20, ST77XX_BLACK);
+        tft.setCursor(20, 110);
+        tft.setTextSize(2);
+        tft.setTextColor(ST77XX_GREEN);
+        tft.printf("Progression: %u%%", percent);
+        lastPercent = percent;
+      }
+
+      // Donner du temps au WiFi
+      yield();
     });
     ArduinoOTA.onError([](ota_error_t error) {
       Serial.printf("Erreur OTA[%u]: ", error);
-      if (error == OTA_AUTH_ERROR)
+      const char* errorMsg = "Erreur inconnue";
+      if (error == OTA_AUTH_ERROR) {
         Serial.println("Auth Failed");
-      else if (error == OTA_BEGIN_ERROR)
+        errorMsg = "Auth Failed";
+      } else if (error == OTA_BEGIN_ERROR) {
         Serial.println("Begin Failed");
-      else if (error == OTA_CONNECT_ERROR)
+        errorMsg = "Begin Failed";
+      } else if (error == OTA_CONNECT_ERROR) {
         Serial.println("Connect Failed");
-      else if (error == OTA_RECEIVE_ERROR)
+        errorMsg = "Connect Failed";
+      } else if (error == OTA_RECEIVE_ERROR) {
         Serial.println("Receive Failed");
-      else if (error == OTA_END_ERROR)
+        errorMsg = "Receive Failed";
+      } else if (error == OTA_END_ERROR) {
         Serial.println("End Failed");
+        errorMsg = "End Failed";
+      }
+
+      tft.fillScreen(ST77XX_BLACK);
+      tft.setCursor(20, 60);
+      tft.setTextSize(2);
+      tft.setTextColor(ST77XX_RED);
+      tft.println("ERREUR OTA");
+      tft.setCursor(20, 90);
+      tft.setTextSize(1);
+      tft.println(errorMsg);
+      delay(3000);
+      ESP.restart(); // Redémarrer pour retrouver un état stable
     });
     ArduinoOTA.begin();
     Serial.println("OTA activé");
@@ -257,6 +322,12 @@ void setup() {
 // LOOP
 // ============================================================
 void loop() {
+  // Si OTA en cours, ne gérer que l'OTA et rien d'autre
+  if (otaInProgress) {
+    ArduinoOTA.handle();
+    return;
+  }
+
   unsigned long currentMillis = millis();
 
   // OPT#11 : Nourrir le watchdog — preuve que le programme n'est pas bloqué
