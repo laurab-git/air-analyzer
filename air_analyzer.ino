@@ -40,9 +40,9 @@
 #define MQTT_RETRY_MS 5000UL          // Retry MQTT
 #define WIFI_RETRY_MS 10000UL         // Retry WiFi
 #define VIEW_CYCLE_MS 5000UL          // Durée de chaque vue du cycle
-#define WDT_TIMEOUT_S 30              // Watchdog : reset après 30s de blocage
-#define TEMP_OFFSET 0.0f              // Correction offset thermique SCD40 (°C)
-// À calibrer empiriquement selon votre montage
+#define WDT_TIMEOUT_S 60              // Watchdog : reset après 60s (permet l'OTA)
+#define TEMP_OFFSET 1.7f              // Correction offset thermique SCD40 (°C)
+// Calibré : SCD40 affichait 23.8°C pour 22.1°C réel
 
 // Timezone POSIX Europe/Paris : gère automatiquement heure été/hiver
 #define TIMEZONE_STR "CET-1CEST,M3.5.0,M10.5.0/3"
@@ -152,6 +152,16 @@ void setup() {
     tft.print("IP: ");
     tft.println(WiFi.localIP());
 
+    // Affichage IP dans le Serial Monitor aussi
+    Serial.print("Adresse IP: ");
+    Serial.println(WiFi.localIP());
+    Serial.print("Masque de sous-réseau: ");
+    Serial.println(WiFi.subnetMask());
+    Serial.print("Passerelle: ");
+    Serial.println(WiFi.gatewayIP());
+    Serial.print("MAC: ");
+    Serial.println(WiFi.macAddress());
+
     // OPT#3 : Timezone POSIX — heure été/hiver gérée automatiquement
     configTzTime(TIMEZONE_STR, NTP_SERVER);
 
@@ -163,8 +173,13 @@ void setup() {
     ArduinoOTA.onStart([]() {
       String type = (ArduinoOTA.getCommand() == U_FLASH) ? "sketch" : "filesystem";
       Serial.println("Début mise à jour OTA: " + type);
+      // Désactiver le watchdog pendant l'OTA pour éviter les resets
+      esp_task_wdt_delete(NULL);
     });
-    ArduinoOTA.onEnd([]() { Serial.println("\nMise à jour OTA terminée"); });
+    ArduinoOTA.onEnd([]() {
+      Serial.println("\nMise à jour OTA terminée");
+      // Le watchdog sera réinitialisé au redémarrage
+    });
     ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
       Serial.printf("Progression: %u%%\r", (progress / (total / 100)));
     });
@@ -378,7 +393,8 @@ void loop() {
 void updateStats(uint16_t co2, float t, float h) {
   // OPT#7 : Utilisation de g_timeinfo global, pas de nouvel appel système
   int currentHour = g_timeValid ? g_timeinfo.tm_hour : 12;
-  bool isNight = (currentHour >= 22 || currentHour < 7);
+  int currentMin = g_timeValid ? g_timeinfo.tm_min : 0;
+  bool isNight = (currentHour >= 23 || (currentHour == 22 && currentMin >= 45) || currentHour < 7);
 
   if (isNight) {
     nightDataAvail = true;
@@ -439,7 +455,8 @@ void updateDisplayCycle() {
     return;
   }
 
-  bool isNight = (currentHour >= 22 || currentHour < 7);
+  int currentMin = g_timeValid ? g_timeinfo.tm_min : 0;
+  bool isNight = (currentHour >= 23 || (currentHour == 22 && currentMin >= 45) || currentHour < 7);
   if (isNight) {
     if (isDisplayOn) {
       updateBacklight(false);
