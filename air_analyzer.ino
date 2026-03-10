@@ -181,7 +181,13 @@ void setup() {
     ArduinoOTA.onStart([]() {
       otaInProgress = true; // Bloquer toutes les autres tâches
       esp_task_wdt_delete(NULL); // Désactiver le watchdog
+
+      // Libérer un maximum de mémoire
+      mqttClient.disconnect();
+      scd4x.stopPeriodicMeasurement();
+
       Serial.println("OTA Start");
+      Serial.printf("Free heap: %d bytes\n", ESP.getFreeHeap());
     });
     ArduinoOTA.onEnd([]() {
       Serial.println("\nOTA OK");
