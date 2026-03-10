@@ -414,7 +414,7 @@ void updateStats(uint16_t co2, float t, float h) {
   // OPT#7 : Utilisation de g_timeinfo global, pas de nouvel appel système
   int currentHour = g_timeValid ? g_timeinfo.tm_hour : 12;
   int currentMin = g_timeValid ? g_timeinfo.tm_min : 0;
-  bool isNight = ((currentHour == 23 && currentMin >= 15) || currentHour < 7);
+  bool isNight = ((currentHour == 23 && currentMin >= 30) || currentHour < 7);
 
   if (isNight) {
     nightDataAvail = true;
@@ -476,7 +476,7 @@ void updateDisplayCycle() {
   }
 
   int currentMin = g_timeValid ? g_timeinfo.tm_min : 0;
-  bool isNight = ((currentHour == 23 && currentMin >= 15) || currentHour < 7);
+  bool isNight = ((currentHour == 23 && currentMin >= 30) || currentHour < 7);
   if (isNight) {
     if (isDisplayOn) {
       updateBacklight(false);
