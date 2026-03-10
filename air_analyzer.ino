@@ -38,7 +38,6 @@
 #define WEATHER_INTERVAL_MS 3600000UL // 1 heure
 #define MQTT_RETRY_MS 5000UL          // Retry MQTT
 #define WIFI_RETRY_MS 10000UL         // Retry WiFi
-#define BOOT_DURATION_MS 60000UL      // Phase de boot : 1 minute
 #define VIEW_CYCLE_MS 5000UL          // Durée de chaque vue du cycle
 #define WDT_TIMEOUT_S 30              // Watchdog : reset après 30s de blocage
 #define TEMP_OFFSET 0.0f              // Correction offset thermique SCD40 (°C)
@@ -78,8 +77,6 @@ RTC_DATA_ATTR int lastResetHour =
 // --- ÉTAT GLOBAL ---
 // ============================================================
 bool isDisplayOn = true;
-bool bootPhaseComplete = false;
-unsigned long bootTimeStart = 0;
 
 // OPT#1 : Une seule variable lastCO2, globale, sans doublon dans displayUI()
 uint16_t lastCO2 = 0;
@@ -109,13 +106,8 @@ bool g_timeValid = false;
 void setup() {
   Serial.begin(115200);
 
-  // OPT#11 : Watchdog matériel — si loop() se bloque plus de 30s, reboot auto
-  const esp_task_wdt_config_t wdt_config = {
-      .timeout_ms = WDT_TIMEOUT_S * 1000,
-      .idle_core_mask = 0,
-      .trigger_panic = true,
-  };
-  esp_task_wdt_init(&wdt_config);
+  // OPT#11 : Watchdog matériel — déjà initialisé par ESP32 core
+  // On s'enregistre simplement pour le nourrir dans loop()
   esp_task_wdt_add(NULL);
 
   // Rétroéclairage PWM
@@ -214,7 +206,6 @@ void setup() {
   // OPT#8 : Offset de température pour compenser la chaleur de l'ESP32
   scd4x.setTemperatureOffset(TEMP_OFFSET);
 
-  bootTimeStart = millis();
   tft.fillScreen(ST77XX_BLACK);
 
   esp_task_wdt_reset();
@@ -415,15 +406,7 @@ void updateDisplayCycle() {
   int currentHour = g_timeValid ? g_timeinfo.tm_hour : 12;
   unsigned long currentMillis = millis();
 
-  // Phase de boot (1 minute)
-  if (!bootPhaseComplete) {
-    displayUI(lastCO2, lastTemp, lastHum,
-              hasValidData ? "INITIALISATION (1mn)" : "ATTENTE CAPTEUR...");
-    if ((unsigned long)(currentMillis - bootTimeStart) > BOOT_DURATION_MS)
-      bootPhaseComplete = true;
-    return;
-  }
-
+  // Attente des premières données
   if (!hasValidData) {
     displayUI(0, 0, 0, "ATTENTE CAPTEUR...");
     return;
@@ -610,8 +593,9 @@ void fetchWeather() {
   int httpCode = http.GET();
 
   if (httpCode == HTTP_CODE_OK) {
+    String payload = http.getString();
     JsonDocument doc;
-    DeserializationError err = deserializeJson(doc, http.getStream());
+    DeserializationError err = deserializeJson(doc, payload);
 
     if (!err) {
       // OPT#7 : g_timeinfo global
