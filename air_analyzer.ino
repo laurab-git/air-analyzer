@@ -1,4 +1,5 @@
 #include "secrets.h"
+#include "version.h"
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7789.h>
 #include <ArduinoJson.h>
@@ -189,7 +190,33 @@ void setup() {
     tft.println("Mode hors-ligne...");
   }
 
-  delay(3000);
+  delay(2000);
+  esp_task_wdt_reset();
+
+  // --- Écran de bienvenue ---
+  tft.fillScreen(ST77XX_BLACK);
+  tft.setTextColor(ST77XX_CYAN);
+  tft.setTextSize(3);
+  tft.setCursor(60, 50);
+  tft.println("AIR");
+  tft.setCursor(30, 85);
+  tft.println("ANALYZER");
+
+  tft.setTextSize(2);
+  tft.setTextColor(ST77XX_YELLOW);
+  tft.setCursor(110, 130);
+  tft.println(FIRMWARE_VERSION);
+
+  tft.setTextSize(1);
+  tft.setTextColor(ST77XX_WHITE);
+  tft.setCursor(95, 155);
+  tft.print("Build ");
+  tft.print(BUILD_NUMBER);
+  tft.print(" (");
+  tft.print(GIT_HASH);
+  tft.println(")");
+
+  delay(2000);
   esp_task_wdt_reset();
 
   // --- Capteur SCD40 ---
