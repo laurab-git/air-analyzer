@@ -40,7 +40,7 @@
 #define BOOT_DURATION_MS 60000UL      // Phase de boot : 1 minute
 #define VIEW_CYCLE_MS 5000UL          // Durée de chaque vue du cycle
 #define WDT_TIMEOUT_S 30              // Watchdog : reset après 30s de blocage
-#define TEMP_OFFSET 2.0f              // Correction offset thermique SCD40 (°C)
+#define TEMP_OFFSET 0.0f              // Correction offset thermique SCD40 (°C)
 // À calibrer empiriquement selon votre montage
 
 // Timezone POSIX Europe/Paris : gère automatiquement heure été/hiver
@@ -408,7 +408,7 @@ void updateDisplayCycle() {
   if (!isDisplayOn)
     updateBacklight(true);
 
-  // Cycle des vues (5 secondes chacune)
+  // Cycle des vues (valeurs actuelles: 10s, autres: 5s)
   int modes[4];
   int modeCount = 0;
   modes[modeCount++] = 0; // Valeurs actuelles — toujours présent
@@ -429,9 +429,13 @@ void updateDisplayCycle() {
     currentViewIdx = 0;
     lastViewSwitch = currentMillis;
     lastModeCount = modeCount;
-  } else if ((unsigned long)(currentMillis - lastViewSwitch) >= VIEW_CYCLE_MS) {
-    currentViewIdx = (currentViewIdx + 1) % modeCount;
-    lastViewSwitch = currentMillis;
+  } else {
+    // Durée d'affichage : 10s pour les valeurs actuelles, 5s pour les autres
+    unsigned long viewDuration = (modes[currentViewIdx] == 0) ? 10000UL : VIEW_CYCLE_MS;
+    if ((unsigned long)(currentMillis - lastViewSwitch) >= viewDuration) {
+      currentViewIdx = (currentViewIdx + 1) % modeCount;
+      lastViewSwitch = currentMillis;
+    }
   }
 
   switch (modes[currentViewIdx]) {
@@ -566,7 +570,7 @@ void fetchWeather() {
   String url =
       "http://api.open-meteo.com/v1/forecast?latitude=" + String(LATITUDE, 4) +
       "&longitude=" + String(LONGITUDE, 4) +
-      "&daily=weather_code,temperature_2m_max,temperature_2m_min"
+      "&daily=weather_code,temperature_2m_max,temperature_2m_min" +
       "&timezone=Europe%2FParis";
 
   http.begin(weatherClient, url);
