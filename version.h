@@ -4,9 +4,9 @@
 #ifndef VERSION_H
 #define VERSION_H
 
-#define BUILD_NUMBER 17
-#define GIT_HASH "68a73af"
-#define BUILD_DATE "2026-03-11 16:27:33"
-#define FIRMWARE_VERSION "v17"
+#define BUILD_NUMBER 18
+#define GIT_HASH "95e0c2f"
+#define BUILD_DATE "2026-03-11 23:32:02"
+#define FIRMWARE_VERSION "v18"
 
 #endif

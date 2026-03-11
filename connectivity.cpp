@@ -1,13 +1,13 @@
-#include <Arduino.h>
 #include "connectivity.h"
 #include "config.h"
-#include "utils.h"
-#include "sensor.h"
 #include "secrets.h"
-#include <Network.h>
-#include <WiFi.h>
-#include <PubSubClient.h>
+#include "sensor.h"
+#include "utils.h"
+#include <Arduino.h>
 #include <ArduinoOTA.h>
+#include <Network.h>
+#include <PubSubClient.h>
+#include <WiFi.h>
 #include <esp_task_wdt.h>
 
 // ============================================================
@@ -58,6 +58,8 @@ void initNetwork() {
 
     ArduinoOTA.onStart([]() {
       otaInProgress = true;
+      // On désactive le watchDog pour éviter le reboot intempestif du
+      // contrôleur
       esp_task_wdt_delete(NULL);
 
       // Libérer un maximum de mémoire
@@ -68,9 +70,7 @@ void initNetwork() {
       Serial.printf("Free heap: %d bytes\n", ESP.getFreeHeap());
     });
 
-    ArduinoOTA.onEnd([]() {
-      Serial.println("\nOTA OK");
-    });
+    ArduinoOTA.onEnd([]() { Serial.println("\nOTA OK"); });
 
     ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
       static unsigned int lastPercent = 0;
@@ -83,11 +83,16 @@ void initNetwork() {
 
     ArduinoOTA.onError([](ota_error_t error) {
       Serial.printf("OTA Error[%u]: ", error);
-      if (error == OTA_AUTH_ERROR) Serial.println("Auth");
-      else if (error == OTA_BEGIN_ERROR) Serial.println("Begin");
-      else if (error == OTA_CONNECT_ERROR) Serial.println("Connect");
-      else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive");
-      else if (error == OTA_END_ERROR) Serial.println("End");
+      if (error == OTA_AUTH_ERROR)
+        Serial.println("Auth");
+      else if (error == OTA_BEGIN_ERROR)
+        Serial.println("Begin");
+      else if (error == OTA_CONNECT_ERROR)
+        Serial.println("Connect");
+      else if (error == OTA_RECEIVE_ERROR)
+        Serial.println("Receive");
+      else if (error == OTA_END_ERROR)
+        Serial.println("End");
       ESP.restart();
     });
 
@@ -153,8 +158,8 @@ void publishSensorData(uint16_t co2, float temp, float hum) {
   if (mqttClient.connected()) {
     char payload[128];
     snprintf(payload, sizeof(payload),
-             "{\"temperature\":%.2f,\"humidity\":%.2f,\"co2\":%d}", temp,
-             hum, co2);
+             "{\"temperature\":%.2f,\"humidity\":%.2f,\"co2\":%d}", temp, hum,
+             co2);
     mqttClient.publish("weather_probe/sensor/state", payload);
     Serial.printf("MQTT publié: %s\n", payload);
   }
@@ -169,6 +174,4 @@ void handleOTA() {
   }
 }
 
-bool isOTAInProgress() {
-  return otaInProgress;
-}
+bool isOTAInProgress() { return otaInProgress; }
