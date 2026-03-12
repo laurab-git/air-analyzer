@@ -25,10 +25,22 @@ static unsigned long lastDisplayUpdate = 0;
 static unsigned long lastCursorToggle = 0;
 static bool cursorVisible = true;
 
+// Nouveaux états pour le système de modes
+static DisplayMode currentDisplayMode = DISPLAY_MODE_AUTO;
+static BrightnessLevel currentBrightness = BRIGHTNESS_MED;
+static BrightnessLevel manualBrightness = BRIGHTNESS_MED;
+static bool manualPowerState = true;
+
+// Variables de navigation partagées entre updateDisplayCycle() et nextDisplayView()
+static int currentViewIdx = 0;
+static unsigned long lastViewSwitch = 0;
+static int lastModeCount = 0;
+
 // ============================================================
 // --- PROTOTYPES INTERNES ---
 // ============================================================
-static void updateBacklight(bool on);
+static void updateBacklight(BrightnessLevel level);
+static BrightnessLevel getAutoBrightness();
 static void updateDisplayCycle();
 static void displayUI(uint16_t co2, float t, float h, const char *label);
 static void displayWeatherUI(uint8_t code, float maxT, float minT, bool tomorrow);
@@ -102,37 +114,93 @@ void handleDisplayUpdate() {
 // ============================================================
 // --- RÉTROÉCLAIRAGE ---
 // ============================================================
-static void updateBacklight(bool on) {
-  isDisplayOn = on;
-  ledcWrite(TFT_BL, on ? 80 : 0);
+static void updateBacklight(BrightnessLevel level) {
+  isDisplayOn = (level > BRIGHTNESS_OFF);
+  currentBrightness = level;
+  ledcWrite(TFT_BL, level);
+}
+
+// ============================================================
+// --- LUMINOSITÉ AUTOMATIQUE ---
+// ============================================================
+static BrightnessLevel getAutoBrightness() {
+  if (!g_timeValid) {
+    return BRIGHTNESS_MED; // Par défaut si pas d'heure
+  }
+
+  int currentHour = g_timeinfo.tm_hour;
+  int currentMin = g_timeinfo.tm_min;
+
+  // Mode nuit : 23h30 - 7h00 → Éteint
+  if ((currentHour == 23 && currentMin >= 30) || currentHour < 7) {
+    return BRIGHTNESS_OFF;
+  }
+  // Soirée : 22h00 - 23h30 → Très faible
+  else if (currentHour == 22 || (currentHour == 23 && currentMin < 30)) {
+    return BRIGHTNESS_NIGHT;
+  }
+  // Début de soirée : 18h00 - 22h00 → Moyen
+  else if (currentHour >= 18 && currentHour < 22) {
+    return BRIGHTNESS_MED;
+  }
+  // Journée : 7h00 - 18h00 → Fort
+  else {
+    return BRIGHTNESS_HIGH;
+  }
 }
 
 // ============================================================
 // --- CYCLE D'AFFICHAGE ---
 // ============================================================
 static void updateDisplayCycle() {
-  int currentHour = g_timeValid ? g_timeinfo.tm_hour : 12;
   unsigned long currentMillis = millis();
 
-  // Attente des premières données
-  if (!hasValidData()) {
-    displayUI(0, 0, 0, "ATTENTE CAPTEUR...");
-    return;
-  }
-
-  // Mode nuit
-  int currentMin = g_timeValid ? g_timeinfo.tm_min : 0;
-  bool isNight = ((currentHour == 23 && currentMin >= 30) || currentHour < 7);
-  if (isNight) {
+  // Mode OFF : écran toujours éteint
+  if (currentDisplayMode == DISPLAY_MODE_OFF) {
     if (isDisplayOn) {
-      updateBacklight(false);
+      updateBacklight(BRIGHTNESS_OFF);
       tft.fillScreen(ST77XX_BLACK);
     }
     return;
   }
 
-  if (!isDisplayOn)
-    updateBacklight(true);
+  // Attente des premières données
+  if (!hasValidData()) {
+    // En mode auto, utiliser luminosité auto, sinon la luminosité manuelle
+    BrightnessLevel targetBrightness = (currentDisplayMode == DISPLAY_MODE_AUTO)
+                                        ? getAutoBrightness()
+                                        : (manualPowerState ? manualBrightness : BRIGHTNESS_OFF);
+
+    if (currentBrightness != targetBrightness) {
+      updateBacklight(targetBrightness);
+    }
+    if (isDisplayOn) {
+      displayUI(0, 0, 0, "ATTENTE CAPTEUR...");
+    }
+    return;
+  }
+
+  // Déterminer la luminosité cible selon le mode
+  BrightnessLevel targetBrightness;
+  if (currentDisplayMode == DISPLAY_MODE_AUTO) {
+    targetBrightness = getAutoBrightness();
+  } else { // DISPLAY_MODE_MANUAL
+    targetBrightness = manualPowerState ? manualBrightness : BRIGHTNESS_OFF;
+  }
+
+  // Appliquer la luminosité si changement
+  if (currentBrightness != targetBrightness) {
+    updateBacklight(targetBrightness);
+    if (targetBrightness == BRIGHTNESS_OFF) {
+      tft.fillScreen(ST77XX_BLACK);
+      return;
+    }
+  }
+
+  // Si écran éteint, pas besoin de mettre à jour le contenu
+  if (!isDisplayOn) {
+    return;
+  }
 
   // Cycle des vues (valeurs actuelles: 10s, autres: 5s)
   int modes[4];
@@ -144,10 +212,6 @@ static void updateDisplayCycle() {
     modes[modeCount++] = 1;
   if (hasDayData() && getDayMaxCO2() > 0)
     modes[modeCount++] = 2;
-
-  static int lastModeCount = 0;
-  static int currentViewIdx = 0;
-  static unsigned long lastViewSwitch = 0;
 
   if (modeCount != lastModeCount) {
     currentViewIdx = 0;
@@ -369,5 +433,89 @@ static void displayWeatherUI(uint8_t code, float maxT, float minT, bool tomorrow
     tft.setCursor(260, 10);
     tft.printf("%02d:%02d", g_timeinfo.tm_hour, g_timeinfo.tm_min);
     lastDisplayMinute = g_timeinfo.tm_min;
+  }
+}
+
+// ============================================================
+// --- API PUBLIQUE : CONTRÔLE DES MODES ---
+// ============================================================
+void setDisplayMode(DisplayMode mode) {
+  currentDisplayMode = mode;
+  // Forcer une mise à jour immédiate
+  updateDisplayCycle();
+}
+
+DisplayMode getDisplayMode() {
+  return currentDisplayMode;
+}
+
+// ============================================================
+// --- API PUBLIQUE : CONTRÔLE DE LA LUMINOSITÉ ---
+// ============================================================
+void setDisplayBrightness(BrightnessLevel level) {
+  manualBrightness = level;
+  if (currentDisplayMode == DISPLAY_MODE_MANUAL) {
+    updateBacklight(manualPowerState ? level : BRIGHTNESS_OFF);
+  }
+  // Note: En mode AUTO, la luminosité sera appliquée lors du prochain cycle
+}
+
+BrightnessLevel getDisplayBrightness() {
+  return currentBrightness;
+}
+
+// ============================================================
+// --- API PUBLIQUE : CONTRÔLE ON/OFF MANUEL ---
+// ============================================================
+void toggleDisplayPower() {
+  if (currentDisplayMode == DISPLAY_MODE_MANUAL) {
+    manualPowerState = !manualPowerState;
+    updateBacklight(manualPowerState ? manualBrightness : BRIGHTNESS_OFF);
+    if (!manualPowerState) {
+      tft.fillScreen(ST77XX_BLACK);
+    }
+  }
+}
+
+bool isDisplayPoweredOn() {
+  return isDisplayOn;
+}
+
+// ============================================================
+// --- API PUBLIQUE : NAVIGATION MANUELLE ---
+// ============================================================
+void nextDisplayView() {
+  // Force le passage à la vue suivante dans le cycle
+  // Les variables sont partagées au niveau du fichier
+
+  // Récupérer les modes disponibles (même logique que dans updateDisplayCycle)
+  int modes[4];
+  int modeCount = 0;
+  modes[modeCount++] = 0; // Valeurs actuelles
+  if (hasWeatherData())
+    modes[modeCount++] = 3;
+  if (hasNightData() && getNightMaxCO2() > 0)
+    modes[modeCount++] = 1;
+  if (hasDayData() && getDayMaxCO2() > 0)
+    modes[modeCount++] = 2;
+
+  currentViewIdx = (currentViewIdx + 1) % modeCount;
+  lastViewSwitch = millis();
+
+  // Afficher immédiatement la nouvelle vue
+  switch (modes[currentViewIdx]) {
+  case 0:
+    displayUI(getLastCO2(), getLastTemp(), getLastHum(), "VALEURS ACTUELLES");
+    break;
+  case 1:
+    displayUI(getNightMaxCO2(), getNightMinTemp(), getNightMaxHum(), "EXTREMES DE LA NUIT");
+    break;
+  case 2:
+    displayUI(getDayMaxCO2(), getDayMinTemp(), getDayMaxHum(), "EXTREMES DU JOUR");
+    break;
+  case 3:
+    displayWeatherUI(getWeatherCode(), getWeatherMaxTemp(), getWeatherMinTemp(),
+                     isWeatherForTomorrow());
+    break;
   }
 }

@@ -20,6 +20,10 @@
 #define I2C_SDA 5
 #define I2C_SCL 6
 
+// Bouton tactile (GPIO avec pull-up interne)
+// Connecter bouton entre GPIO 8 et GND
+#define BUTTON_PIN 8
+
 // ============================================================
 // --- CONSTANTES TEMPORELLES ---
 // ============================================================
@@ -30,6 +34,11 @@
 #define WIFI_RETRY_MS 10000UL         // Retry WiFi
 #define VIEW_CYCLE_MS 5000UL          // Durée de chaque vue du cycle
 #define WDT_TIMEOUT_S 60              // Watchdog : reset après 60s (permet l'OTA)
+
+// Bouton
+#define DEBOUNCE_MS 50UL              // Antirebond
+#define LONG_PRESS_MS 1000UL          // Durée appui long (1 seconde)
+#define DOUBLE_PRESS_WINDOW_MS 400UL  // Fenêtre détection double appui
 
 // ============================================================
 // --- CALIBRATION CAPTEUR ---

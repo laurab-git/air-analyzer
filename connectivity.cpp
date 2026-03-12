@@ -2,6 +2,7 @@
 #include "config.h"
 #include "secrets.h"
 #include "sensor.h"
+#include "display.h"
 #include "utils.h"
 #include <Arduino.h>
 #include <ArduinoOTA.h>
@@ -20,6 +21,73 @@ static PubSubClient mqttClient(espClient);
 // --- ÉTAT OTA ---
 // ============================================================
 static bool otaInProgress = false;
+
+// ============================================================
+// --- CALLBACK MQTT ---
+// ============================================================
+static void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  // Convertir le payload en string
+  String message = "";
+  for (unsigned int i = 0; i < length; i++) {
+    message += (char)payload[i];
+  }
+
+  Serial.printf("MQTT reçu [%s]: %s\n", topic, message.c_str());
+
+  // Commandes de contrôle de l'affichage
+  if (strcmp(topic, "air_analyzer/display/mode/set") == 0) {
+    if (message == "auto") {
+      Serial.println("MQTT: Passage en mode AUTO");
+      setDisplayMode(DISPLAY_MODE_AUTO);
+      mqttClient.publish("air_analyzer/display/mode", "auto", true);
+    } else if (message == "manual") {
+      Serial.println("MQTT: Passage en mode MANUAL");
+      setDisplayMode(DISPLAY_MODE_MANUAL);
+      mqttClient.publish("air_analyzer/display/mode", "manual", true);
+    } else if (message == "off") {
+      Serial.println("MQTT: Passage en mode OFF");
+      setDisplayMode(DISPLAY_MODE_OFF);
+      mqttClient.publish("air_analyzer/display/mode", "off", true);
+    }
+  }
+  else if (strcmp(topic, "air_analyzer/display/brightness/set") == 0) {
+    BrightnessLevel level = BRIGHTNESS_MED;
+    if (message == "off" || message == "0") level = BRIGHTNESS_OFF;
+    else if (message == "night" || message == "20") level = BRIGHTNESS_NIGHT;
+    else if (message == "low" || message == "60") level = BRIGHTNESS_LOW;
+    else if (message == "med" || message == "120") level = BRIGHTNESS_MED;
+    else if (message == "high" || message == "200") level = BRIGHTNESS_HIGH;
+    else {
+      // Essayer de parser comme nombre
+      int val = message.toInt();
+      if (val >= 0 && val <= 255) {
+        level = (BrightnessLevel)val;
+      }
+    }
+    Serial.printf("MQTT: Luminosité -> %d\n", (int)level);
+    setDisplayBrightness(level);
+    mqttClient.publish("air_analyzer/display/brightness", String((int)level).c_str(), true);
+  }
+  else if (strcmp(topic, "air_analyzer/display/power/set") == 0) {
+    if (message == "on" || message == "1") {
+      Serial.println("MQTT: Power ON demandé");
+      if (getDisplayMode() == DISPLAY_MODE_MANUAL && !isDisplayPoweredOn()) {
+        toggleDisplayPower();
+      } else if (getDisplayMode() != DISPLAY_MODE_MANUAL) {
+        Serial.println("MQTT: Impossible - pas en mode MANUAL");
+      }
+      mqttClient.publish("air_analyzer/display/power", "on", true);
+    } else if (message == "off" || message == "0") {
+      Serial.println("MQTT: Power OFF demandé");
+      if (getDisplayMode() == DISPLAY_MODE_MANUAL && isDisplayPoweredOn()) {
+        toggleDisplayPower();
+      } else if (getDisplayMode() != DISPLAY_MODE_MANUAL) {
+        Serial.println("MQTT: Impossible - pas en mode MANUAL");
+      }
+      mqttClient.publish("air_analyzer/display/power", "off", true);
+    }
+  }
+}
 
 // ============================================================
 // --- INITIALISATION RÉSEAU ---
@@ -51,6 +119,7 @@ void initNetwork() {
 
     // Configuration MQTT
     mqttClient.setServer(MQTT_SERVER, 1883);
+    mqttClient.setCallback(mqttCallback);
 
     // Configuration OTA
     ArduinoOTA.setHostname("air-analyzer");
@@ -138,6 +207,18 @@ void handleMQTT() {
 
       if (mqttClient.connect(clientId.c_str(), MQTT_USER, MQTT_PASS)) {
         Serial.println("connecté !");
+
+        // Abonnement aux topics de commande
+        mqttClient.subscribe("air_analyzer/display/mode/set");
+        mqttClient.subscribe("air_analyzer/display/brightness/set");
+        mqttClient.subscribe("air_analyzer/display/power/set");
+
+        // Publication de l'état initial
+        const char* modeStr = (getDisplayMode() == DISPLAY_MODE_AUTO) ? "auto" :
+                              (getDisplayMode() == DISPLAY_MODE_MANUAL) ? "manual" : "off";
+        mqttClient.publish("air_analyzer/display/mode", modeStr, true);
+        mqttClient.publish("air_analyzer/display/brightness", String((int)getDisplayBrightness()).c_str(), true);
+        mqttClient.publish("air_analyzer/display/power", isDisplayPoweredOn() ? "on" : "off", true);
       } else {
         int state = mqttClient.state();
         Serial.printf("échec rc=%d%s\n", state,
@@ -162,6 +243,16 @@ void publishSensorData(uint16_t co2, float temp, float hum) {
              co2);
     mqttClient.publish("weather_probe/sensor/state", payload);
     Serial.printf("MQTT publié: %s\n", payload);
+  }
+}
+
+void publishDisplayState() {
+  if (mqttClient.connected()) {
+    const char* modeStr = (getDisplayMode() == DISPLAY_MODE_AUTO) ? "auto" :
+                          (getDisplayMode() == DISPLAY_MODE_MANUAL) ? "manual" : "off";
+    mqttClient.publish("air_analyzer/display/mode", modeStr, true);
+    mqttClient.publish("air_analyzer/display/brightness", String((int)getDisplayBrightness()).c_str(), true);
+    mqttClient.publish("air_analyzer/display/power", isDisplayPoweredOn() ? "on" : "off", true);
   }
 }
 

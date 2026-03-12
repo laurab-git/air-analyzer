@@ -15,4 +15,7 @@ bool isOTAInProgress();
 // Publication de données capteur sur MQTT
 void publishSensorData(uint16_t co2, float temp, float hum);
 
+// Publication de l'état de l'affichage sur MQTT
+void publishDisplayState();
+
 #endif // CONNECTIVITY_H
