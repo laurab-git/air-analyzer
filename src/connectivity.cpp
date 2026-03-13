@@ -6,7 +6,6 @@
 #include "utils.h"
 #include <Arduino.h>
 #include <ArduinoOTA.h>
-#include <Network.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
 #include <esp_task_wdt.h>
@@ -143,10 +142,10 @@ void initNetwork() {
     ArduinoOTA.onEnd([]() { Serial.println("\nOTA OK"); });
 
     ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-      static unsigned int lastPercent = 0;
-      unsigned int percent = (progress / (total / 100));
-      if (percent >= lastPercent + 10 || percent == 100) {
-        Serial.printf("Progress: %u%%\n", percent);
+      static unsigned int lastPercent = 101;  // Valeur impossible pour forcer le premier affichage
+      unsigned int percent = (progress * 100) / total;
+      if (percent != lastPercent) {
+        Serial.printf("OTA Progress: %u%%\n", percent);
         lastPercent = percent;
       }
     });

@@ -1,0 +1,35 @@
+; PlatformIO Project Configuration File
+; Air Analyzer - ESP32-C3 Station de qualité de l'air
+
+[env:esp32c3]
+platform = espressif32
+board = esp32-c3-devkitm-1
+framework = arduino
+
+; Configuration série
+monitor_speed = 115200
+upload_speed = 921600
+
+; Options de build
+build_flags =
+    -DARDUINO_USB_CDC_ON_BOOT=1
+    -DARDUINO_USB_MODE=1
+
+; Bibliothèques nécessaires
+lib_deps =
+    sensirion/Sensirion I2C SCD4x@^0.4.0
+    adafruit/Adafruit GFX Library@^1.11.9
+    adafruit/Adafruit ST7735 and ST7789 Library@^1.10.4
+    knolleary/PubSubClient@^2.8
+    bblanchon/ArduinoJson@^7.0.4
+
+; Configuration OTA (Over-The-Air)
+upload_protocol = espota
+upload_port = air-analyzer.local
+upload_flags =
+    --auth=VOTRE_MOT_DE_PASSE_OTA_ICI
+; Premier upload USB (commenté après le premier upload) :
+; upload_port = /dev/cu.usbmodem1101
+
+; Partition scheme pour supporter OTA
+board_build.partitions = default.csv

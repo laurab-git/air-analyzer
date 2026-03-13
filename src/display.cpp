@@ -51,8 +51,9 @@ static void drawWeatherIcon(uint8_t code, int x, int y);
 // ============================================================
 void initDisplay() {
   // Rétroéclairage PWM
-  ledcAttach(TFT_BL, 5000, 8);
-  ledcWrite(TFT_BL, 120);
+  ledcSetup(0, 5000, 8);  // Canal 0, 5kHz, 8 bits
+  ledcAttachPin(TFT_BL, 0);
+  ledcWrite(0, 120);
 
   // Écran
   SPI.begin(TFT_SCLK, -1, TFT_MOSI, TFT_CS);
@@ -117,7 +118,7 @@ void handleDisplayUpdate() {
 static void updateBacklight(BrightnessLevel level) {
   isDisplayOn = (level > BRIGHTNESS_OFF);
   currentBrightness = level;
-  ledcWrite(TFT_BL, level);
+  ledcWrite(0, level);  // Canal 0
 }
 
 // ============================================================

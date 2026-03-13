@@ -1,7 +1,9 @@
 secrets.h
+platformio.ini
 *.bin
 *.elf
 *.hex
 *.map
 build/
 .vscode/
+.pio/

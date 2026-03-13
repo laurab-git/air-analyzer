@@ -3,7 +3,6 @@
 #include "config.h"
 #include "utils.h"
 #include "secrets.h"
-#include <Network.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>

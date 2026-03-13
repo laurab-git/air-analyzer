@@ -197,59 +197,168 @@ L'écran affiche 4 types de vues en rotation automatique :
 
 ## Installation
 
-### Prérequis
+### Méthode recommandée : PlatformIO (VSCode)
 
-1. Arduino IDE ou PlatformIO
-2. Support ESP32 installé
-3. Bibliothèques requises :
+PlatformIO offre une meilleure expérience de développement avec IntelliSense, builds incrémentaux, et gestion des dépendances automatique.
+
+#### 1. Installation de l'environnement
+
+1. Installer [VSCode](https://code.visualstudio.com/)
+2. Installer l'extension **PlatformIO IDE** depuis le marketplace VSCode
+3. Redémarrer VSCode
+
+#### 2. Configuration du projet
+
+```bash
+# Cloner le projet
+git clone <votre-repo>
+cd air_analyzer
+
+# Copier les fichiers de configuration
+cp platformio.ini.template platformio.ini
+cp secrets.h.example src/secrets.h
+
+# Éditer secrets.h avec vos identifiants
+# Éditer platformio.ini et remplacer VOTRE_MOT_DE_PASSE_OTA_ICI
+```
+
+#### 3. Configuration secrets.h
+
+Éditer `src/secrets.h` avec vos identifiants :
+
+```cpp
+#define WIFI_SSID "votre_ssid"
+#define WIFI_PASS "votre_mot_de_passe"
+#define MQTT_SERVER "192.168.x.x"
+#define MQTT_USER "mqtt_user"
+#define MQTT_PASS "mqtt_password"
+#define OTA_PASSWORD "ota_password"
+```
+
+#### 4. Configuration platformio.ini
+
+Éditer `platformio.ini` et remplacer le mot de passe OTA :
+
+```ini
+upload_flags =
+    --auth=votre_mot_de_passe_ota
+```
+
+> ⚠️ **Important** : `platformio.ini` est dans `.gitignore` pour ne pas exposer votre mot de passe. Utilisez `platformio.ini.template` comme référence.
+
+#### 5. Premier upload (USB)
+
+```bash
+# Connecter l'ESP32 en USB
+# Trouver le port série
+ls /dev/cu.*
+
+# Éditer platformio.ini et configurer :
+upload_port = /dev/cu.usbmodem1101  # Votre port USB
+
+# Compiler et uploader
+platformio run --target upload
+```
+
+Ou dans VSCode :
+- Cliquer sur l'icône **→** (Upload) dans la barre PlatformIO en bas
+
+#### 6. Uploads suivants (OTA)
+
+Après le premier upload, l'ESP32 se connecte au WiFi. Vous pouvez alors :
+
+```bash
+# Éditer platformio.ini et activer OTA :
+upload_protocol = espota
+upload_port = air-analyzer.local
+upload_flags =
+    --auth=votre_mot_de_passe_ota
+
+# Compiler et uploader en OTA
+platformio run --target upload
+```
+
+### Méthode alternative : Arduino IDE
+
+Si vous préférez Arduino IDE :
+
+#### Prérequis
+
+1. Arduino IDE 2.x
+2. Support ESP32 installé via Board Manager
+3. Bibliothèques requises (via Library Manager) :
    - `Adafruit GFX Library`
    - `Adafruit ST7735 and ST7789 Library`
    - `Sensirion I2C SCD4x`
    - `PubSubClient` (MQTT)
    - `ArduinoJson`
-   - `WiFi`
-   - `ArduinoOTA`
 
-### Configuration
+#### Configuration
 
 1. Copier `secrets.h.example` vers `secrets.h`
-2. Éditer `secrets.h` avec vos identifiants :
-   ```cpp
-   #define WIFI_SSID "votre_ssid"
-   #define WIFI_PASS "votre_mot_de_passe"
-   #define MQTT_SERVER "192.168.x.x"
-   #define MQTT_USER "mqtt_user"
-   #define MQTT_PASS "mqtt_password"
-   #define OTA_PASSWORD "ota_password"
-   ```
+2. Renommer `src/air_analyzer.ino` → racine du projet
+3. Ouvrir dans Arduino IDE
+4. Configurer Board : ESP32-C3 Dev Module
+5. Compiler et téléverser
 
-3. Compiler et téléverser via USB
+> **Note** : PlatformIO est recommandé pour les builds plus rapides (2-5x) et une meilleure expérience de développement.
 
-### Mise à jour OTA
-
-Après le premier téléversement USB :
+### Commandes PlatformIO utiles
 
 ```bash
-# Via Arduino IDE : sélectionner le port réseau "air-analyzer"
-# Via PlatformIO :
-pio run --target upload --upload-port air-analyzer.local
+# Compiler le projet
+platformio run
+
+# Compiler et uploader (USB ou OTA selon config)
+platformio run --target upload
+
+# Ouvrir le moniteur série
+platformio device monitor
+
+# Compiler + uploader + moniteur série
+platformio run --target upload && platformio device monitor
+
+# Nettoyer le build
+platformio run --target clean
+
+# Mettre à jour les bibliothèques
+platformio lib update
+
+# Lister les ports série disponibles
+platformio device list
 ```
+
+### Interface VSCode (PlatformIO)
+
+Une fois PlatformIO installé, vous trouverez en bas de VSCode une barre d'outils :
+
+| Icône | Fonction | Raccourci |
+|-------|----------|-----------|
+| ✓ | Build (compiler) | - |
+| → | Upload | - |
+| 🔌 | Serial Monitor | - |
+| 🗑️ | Clean | - |
 
 ## Architecture du code
 
 ```
 air_analyzer/
-├── air_analyzer.ino      # Programme principal
-├── button.cpp/h          # Gestion bouton physique
-├── config.h              # Configuration matérielle
-├── connectivity.cpp/h    # WiFi, MQTT, OTA
-├── display.cpp/h         # Affichage TFT et modes
-├── secrets.h             # Identifiants (non versionné)
-├── sensor.cpp/h          # Lecture capteur SCD40
-├── stats.cpp/h           # Calcul statistiques jour/nuit
-├── utils.cpp/h           # Fonctions utilitaires (temps, watchdog)
-├── version.h             # Version firmware (auto-généré)
-└── weather.cpp/h         # Récupération météo
+├── platformio.ini.template    # Template config PlatformIO (versionné)
+├── platformio.ini             # Config PlatformIO locale (non versionné)
+├── .gitignore                 # Fichiers à ignorer (secrets, builds)
+├── src/                       # Code source
+│   ├── air_analyzer.ino       # Programme principal (setup/loop)
+│   ├── button.cpp/h           # Gestion bouton physique
+│   ├── config.h               # Configuration matérielle (pins, constantes)
+│   ├── connectivity.cpp/h     # WiFi, MQTT, OTA
+│   ├── display.cpp/h          # Affichage TFT et modes
+│   ├── secrets.h              # Identifiants WiFi/MQTT (non versionné)
+│   ├── sensor.cpp/h           # Lecture capteur SCD40
+│   ├── stats.cpp/h            # Calcul statistiques jour/nuit
+│   ├── utils.cpp/h            # Fonctions utilitaires (temps, watchdog)
+│   ├── version.h              # Version firmware
+│   └── weather.cpp/h          # Récupération météo Open-Meteo
+└── .pio/                      # Cache build PlatformIO (non versionné)
 ```
 
 ## Consommation mémoire

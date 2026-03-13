@@ -16,12 +16,7 @@ bool g_timeValid = false;
 void initWatchdog() {
   // Configurer le timeout avant de s'enregistrer
   esp_task_wdt_deinit(); // Désactiver le watchdog par défaut
-  esp_task_wdt_config_t wdt_config = {
-    .timeout_ms = WDT_TIMEOUT_S * 1000,
-    .idle_core_mask = 0,
-    .trigger_panic = true
-  };
-  esp_task_wdt_init(&wdt_config);
+  esp_task_wdt_init(WDT_TIMEOUT_S, true); // timeout en secondes, trigger_panic = true
   esp_task_wdt_add(NULL); // S'enregistrer avec notre nouveau timeout
 }
 
