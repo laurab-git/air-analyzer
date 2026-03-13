@@ -18,7 +18,7 @@ Station de surveillance de la qualité de l'air avec ESP32-C3 et capteur CO2 SCD
 - **Microcontrôleur** : ESP32-C3 SuperMini
 - **Capteur** : Sensirion SCD40 (CO2 NDIR, température, humidité)
 - **Écran** : ST7789 1.9" TFT 170x320 pixels
-- **Bouton** : Bouton tactile ou poussoir (GPIO 8)
+- **Bouton** : Bouton tactile ou poussoir (GPIO 9)
 
 ### Câblage
 
@@ -45,23 +45,23 @@ Station de surveillance de la qualité de l'air avec ESP32-C3 et capteur CO2 SCD
 #### Bouton de contrôle
 | Pin bouton  | Pin ESP32-C3 |
 |-------------|--------------|
-| Un terminal | GPIO 8       |
+| Un terminal | GPIO 9       |
 | Autre       | GND          |
 
-> Note : Le GPIO 8 utilise une résistance pull-up interne, pas besoin de composant externe.
+> Note : Le GPIO 9 utilise une résistance pull-up interne, pas besoin de composant externe. GPIO 8 est un strapping pin et peut causer des conflits au boot.
 
 ## Modes d'affichage
 
 Le système dispose de **3 modes de fonctionnement** :
 
-### Mode AUTO (par défaut)
+### Mode AUTO
 Luminosité adaptative selon l'heure :
 - **7h-18h** : Luminosité forte (200)
 - **18h-22h** : Luminosité moyenne (120)
 - **22h-23h30** : Luminosité faible nuit (20)
 - **23h30-7h** : Écran éteint
 
-### Mode MANUEL
+### Mode MANUEL (par défaut)
 Contrôle total par l'utilisateur :
 - Allumage/extinction manuel
 - Choix de la luminosité (5 niveaux : 0, 20, 60, 120, 200)
