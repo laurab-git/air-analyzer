@@ -279,8 +279,9 @@ void publishDisplayState() {
 
 **Calibration température**:
 ```cpp
-#define TEMP_OFFSET 1.7f  // SCD40 lit ~1.7°C trop chaud
-// Raison: Auto-échauffement du capteur
+#define TEMP_OFFSET -1.0f  // SCD40 lit ~1.0°C trop froid
+// Raison: Environnement du capteur et éloignement de l'ESP32
+// Offset négatif = le capteur ajoute cette valeur
 ```
 
 ### Module Stats (stats.cpp/h)

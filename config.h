@@ -43,8 +43,8 @@
 // ============================================================
 // --- CALIBRATION CAPTEUR ---
 // ============================================================
-#define TEMP_OFFSET 1.7f              // Correction offset thermique SCD40 (°C)
-// Calibré : SCD40 affichait 23.8°C pour 22.1°C réel
+#define TEMP_OFFSET -1.0f             // Correction offset thermique SCD40 (°C)
+// Calibré : SCD40 affichait 18.1°C pour 20.8°C réel (offset négatif = ajouter)
 
 // ============================================================
 // --- TIMEZONE ET NTP ---
