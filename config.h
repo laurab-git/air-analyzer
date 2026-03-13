@@ -21,8 +21,8 @@
 #define I2C_SCL 6
 
 // Bouton tactile (GPIO avec pull-up interne)
-// Connecter bouton entre GPIO 8 et GND
-#define BUTTON_PIN 8
+// Connecter bouton entre GPIO 9 et GND (GPIO 8 peut avoir des conflits sur ESP32-C3)
+#define BUTTON_PIN 9
 
 // ============================================================
 // --- CONSTANTES TEMPORELLES ---

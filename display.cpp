@@ -26,7 +26,7 @@ static unsigned long lastCursorToggle = 0;
 static bool cursorVisible = true;
 
 // Nouveaux états pour le système de modes
-static DisplayMode currentDisplayMode = DISPLAY_MODE_AUTO;
+static DisplayMode currentDisplayMode = DISPLAY_MODE_MANUAL;  // Démarrage en mode MANUAL
 static BrightnessLevel currentBrightness = BRIGHTNESS_MED;
 static BrightnessLevel manualBrightness = BRIGHTNESS_MED;
 static bool manualPowerState = true;
