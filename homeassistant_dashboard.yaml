@@ -1,0 +1,507 @@
+# Configuration Dashboard Home Assistant - Air Analyzer
+# Copier-coller dans Home Assistant > Paramètres > Tableaux de bord
+
+# ============================================================================
+# OPTION 1 : DASHBOARD SIMPLE (sans HACS) - Recommandé pour commencer
+# ============================================================================
+
+# Installation :
+# 1. Paramètres > Tableaux de bord > + CRÉER UN TABLEAU DE BORD
+# 2. Nom : "Qualité de l'Air"
+# 3. Cliquer sur les 3 points > "Modifier" > Passer en mode YAML
+# 4. Copier-coller le code ci-dessous
+
+views:
+  - title: Qualité de l'Air
+    path: air-quality
+    icon: mdi:air-filter
+    cards:
+      - type: markdown
+        content: |
+          # 🌿 Qualité de l'Air - Salon
+          Surveillance en temps réel CO2, température et humidité
+
+      - type: gauge
+        entity: sensor.co2_sejour
+        name: Dioxyde de Carbone
+        unit: ppm
+        needle: true
+        min: 400
+        max: 2000
+        severity:
+          green: 0
+          yellow: 800
+          orange: 1000
+          red: 1500
+        segments:
+          - from: 0
+            color: '#44b544'
+          - from: 800
+            color: '#f4d03f'
+          - from: 1000
+            color: '#ff9800'
+          - from: 1500
+            color: '#e74c3c'
+
+      - type: glance
+        entities:
+          - entity: sensor.co2_sejour
+            name: CO2
+            icon: mdi:molecule-co2
+          - entity: sensor.temperature_sejour
+            name: Température
+            icon: mdi:thermometer
+          - entity: sensor.humidite_sejour
+            name: Humidité
+            icon: mdi:water-percent
+        state_color: true
+
+      - type: history-graph
+        title: Historique 24h
+        hours_to_show: 24
+        entities:
+          - entity: sensor.co2_sejour
+            name: CO2
+          - entity: sensor.temperature_sejour
+            name: Température
+          - entity: sensor.humidite_sejour
+            name: Humidité
+
+      - type: entities
+        title: Contrôle de l'affichage
+        show_header_toggle: false
+        entities:
+          - entity: switch.air_analyzer_display
+            name: Écran
+            icon: mdi:monitor
+          - entity: select.air_analyzer_mode
+            name: Mode
+            icon: mdi:tune
+          - entity: select.air_analyzer_brightness
+            name: Luminosité
+            icon: mdi:brightness-6
+
+---
+
+# ============================================================================
+# OPTION 2 : DASHBOARD MODERNE (avec HACS - Mini Graph Card)
+# ============================================================================
+
+# Prérequis : Installer "Mini Graph Card" via HACS
+# HACS > Frontend > Rechercher "Mini Graph Card" > Installer
+# Ensuite redémarrer Home Assistant
+
+views:
+  - title: Qualité de l'Air
+    path: air-quality
+    icon: mdi:air-filter
+    cards:
+      - type: custom:mini-graph-card
+        entities:
+          - entity: sensor.co2_sejour
+            name: CO2
+            color: '#3498db'
+            show_state: true
+            show_indicator: true
+        name: Qualité de l'Air - Salon
+        icon: mdi:air-filter
+        hours_to_show: 12
+        line_width: 3
+        font_size: 75
+        animate: true
+        show:
+          labels: true
+          points: true
+          legend: false
+        state_map:
+          - value: 0
+            label: Excellent
+          - value: 800
+            label: Bon
+          - value: 1000
+            label: Moyen
+          - value: 1500
+            label: Mauvais
+        color_thresholds:
+          - value: 0
+            color: '#44b544'
+          - value: 800
+            color: '#f4d03f'
+          - value: 1000
+            color: '#ff9800'
+          - value: 1500
+            color: '#e74c3c'
+
+      - type: horizontal-stack
+        cards:
+          - type: custom:mini-graph-card
+            entities:
+              - entity: sensor.temperature_sejour
+                name: Température
+                color: '#e74c3c'
+            icon: mdi:thermometer
+            hours_to_show: 12
+            line_width: 2
+            points_per_hour: 4
+            show:
+              labels: false
+
+          - type: custom:mini-graph-card
+            entities:
+              - entity: sensor.humidite_sejour
+                name: Humidité
+                color: '#3498db'
+            icon: mdi:water-percent
+            hours_to_show: 12
+            line_width: 2
+            points_per_hour: 4
+            show:
+              labels: false
+
+      - type: horizontal-stack
+        cards:
+          - type: button
+            entity: switch.air_analyzer_display
+            name: Écran
+            icon: mdi:monitor
+            tap_action:
+              action: toggle
+            hold_action:
+              action: more-info
+
+          - type: button
+            entity: select.air_analyzer_mode
+            name: Mode
+            icon: mdi:tune
+            tap_action:
+              action: more-info
+
+          - type: button
+            entity: select.air_analyzer_brightness
+            name: Luminosité
+            icon: mdi:brightness-6
+            tap_action:
+              action: more-info
+
+---
+
+# ============================================================================
+# OPTION 3 : DASHBOARD ULTRA-MODERNE (avec HACS - Mushroom Cards)
+# ============================================================================
+
+# Prérequis : Installer "Mushroom Cards" via HACS
+# HACS > Frontend > Rechercher "Mushroom" > Installer
+# Ensuite redémarrer Home Assistant
+
+views:
+  - title: Qualité de l'Air
+    path: air-quality
+    icon: mdi:air-filter
+    cards:
+      # Titre avec emoji vert
+      - type: custom:mushroom-title-card
+        title: 🌿 Qualité de l'Air
+        subtitle: Salon
+
+      # JAUGE CO2 avec code couleur
+      - type: gauge
+        entity: sensor.co2_sejour
+        name: Dioxyde de Carbone
+        unit: ppm
+        needle: true
+        min: 400
+        max: 2000
+        severity:
+          green: 0
+          yellow: 800
+          orange: 1000
+          red: 1500
+        segments:
+          - from: 0
+            color: '#44b544'
+          - from: 800
+            color: '#f4d03f'
+          - from: 1000
+            color: '#ff9800'
+          - from: 1500
+            color: '#e74c3c'
+
+      # Température + Humidité (sous la jauge CO2)
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-entity-card
+            entity: sensor.temperature_sejour
+            name: Température
+            icon: mdi:thermometer
+            icon_color: red
+            primary_info: state
+            secondary_info: name
+
+          - type: custom:mushroom-entity-card
+            entity: sensor.humidite_sejour
+            name: Humidité
+            icon: mdi:water-percent
+            icon_color: blue
+            primary_info: state
+            secondary_info: name
+
+      # Titre contrôles
+      - type: custom:mushroom-title-card
+        subtitle: Contrôle de l'affichage
+
+      # Mode d'affichage
+      - type: custom:mushroom-select-card
+        entity: select.air_analyzer_mode
+        name: Mode d'affichage
+        icon: mdi:tune
+        icon_color: purple
+
+      # Luminosité
+      - type: custom:mushroom-select-card
+        entity: select.air_analyzer_brightness
+        name: Luminosité
+        icon: mdi:brightness-6
+        icon_color: amber
+
+      # Alimentation écran (SOUS luminosité, AVANT les graphiques)
+      - type: custom:mushroom-entity-card
+        entity: switch.air_analyzer_display
+        name: Alimentation écran
+        icon: mdi:monitor
+        icon_color: green
+        tap_action:
+          action: toggle
+        layout: horizontal
+
+      # Graphique historique (après les contrôles)
+      - type: history-graph
+        title: Évolution 24h
+        hours_to_show: 24
+        entities:
+          - entity: sensor.co2_sejour
+            name: CO2
+          - entity: sensor.temperature_sejour
+            name: Température
+          - entity: sensor.humidite_sejour
+            name: Humidité
+
+---
+
+# ============================================================================
+# OPTION 4 : DASHBOARD PROFESSIONNEL (avec HACS - ApexCharts)
+# ============================================================================
+
+# Prérequis : Installer "ApexCharts Card" via HACS
+# HACS > Frontend > Rechercher "ApexCharts" > Installer
+# Ensuite redémarrer Home Assistant
+
+views:
+  - title: Qualité de l'Air
+    path: air-quality
+    icon: mdi:air-filter
+    cards:
+      - type: markdown
+        content: |
+          # 🌿 Station Air Analyzer
+          **Salon** - Surveillance continue de la qualité de l'air
+
+      - type: glance
+        show_name: true
+        show_state: true
+        entities:
+          - entity: sensor.co2_sejour
+            name: CO2
+            icon: mdi:molecule-co2
+          - entity: sensor.temperature_sejour
+            name: Temp
+          - entity: sensor.humidite_sejour
+            name: Hum
+          - entity: switch.air_analyzer_display
+            name: Écran
+        state_color: true
+
+      - type: custom:apexcharts-card
+        header:
+          show: true
+          title: CO2 - Niveaux de qualité
+          show_states: true
+          colorize_states: true
+        graph_span: 24h
+        span:
+          start: day
+        yaxis:
+          - min: 400
+            max: ~2000
+            apex_config:
+              tickAmount: 5
+        series:
+          - entity: sensor.co2_sejour
+            name: CO2
+            stroke_width: 3
+            type: line
+            color: '#3498db'
+            show:
+              in_header: true
+              legend_value: true
+        apex_config:
+          chart:
+            height: 300px
+          annotations:
+            yaxis:
+              - y: 800
+                borderColor: '#f4d03f'
+                label:
+                  text: Seuil BON
+                  style:
+                    color: '#fff'
+                    background: '#f4d03f'
+              - y: 1000
+                borderColor: '#ff9800'
+                label:
+                  text: Aération recommandée
+                  style:
+                    color: '#fff'
+                    background: '#ff9800'
+              - y: 1500
+                borderColor: '#e74c3c'
+                label:
+                  text: DANGER
+                  style:
+                    color: '#fff'
+                    background: '#e74c3c'
+
+      - type: custom:apexcharts-card
+        header:
+          show: true
+          title: Température & Humidité
+        graph_span: 24h
+        span:
+          start: day
+        yaxis:
+          - id: temp
+            min: 15
+            max: 30
+            apex_config:
+              tickAmount: 4
+          - id: hum
+            opposite: true
+            min: 30
+            max: 70
+            apex_config:
+              tickAmount: 4
+        series:
+          - entity: sensor.temperature_sejour
+            name: Température
+            yaxis_id: temp
+            stroke_width: 2
+            color: '#e74c3c'
+          - entity: sensor.humidite_sejour
+            name: Humidité
+            yaxis_id: hum
+            stroke_width: 2
+            color: '#3498db'
+
+      - type: entities
+        title: ⚙️ Paramètres de l'affichage
+        show_header_toggle: false
+        entities:
+          - type: section
+          - entity: select.air_analyzer_mode
+            name: Mode d'affichage
+            icon: mdi:television-guide
+            secondary_info: last-changed
+          - entity: select.air_analyzer_brightness
+            name: Luminosité
+            icon: mdi:brightness-5
+            secondary_info: last-changed
+          - entity: switch.air_analyzer_display
+            name: Alimentation de l'écran
+            icon: mdi:power
+            secondary_info: last-changed
+
+---
+
+# ============================================================================
+# INSTRUCTIONS D'INSTALLATION
+# ============================================================================
+
+# ÉTAPE 1 : Créer le dashboard
+#   - Paramètres > Tableaux de bord > + CRÉER UN TABLEAU DE BORD
+#   - Nom : "Qualité de l'Air"
+#   - Icône : mdi:air-filter
+
+# ÉTAPE 2 : Choisir une option
+#   Option 1 : Simple, sans dépendances (recommandé)
+#   Option 2 : Graphiques modernes (nécessite Mini Graph Card)
+#   Option 3 : Design épuré (nécessite Mushroom Cards)
+#   Option 4 : Graphiques professionnels (nécessite ApexCharts)
+
+# ÉTAPE 3 : Installer les dépendances si nécessaire
+#   a) Installer HACS : https://hacs.xyz/docs/setup/download
+#   b) HACS > Frontend > + > Rechercher la carte
+#   c) Redémarrer Home Assistant
+
+# ÉTAPE 4 : Appliquer la configuration
+#   - Ouvrir le dashboard "Qualité de l'Air"
+#   - 3 points > "Modifier" > "Affichage brut" (mode YAML)
+#   - Copier-coller l'option choisie
+#   - Enregistrer
+
+# ============================================================================
+# PERSONNALISATION DES COULEURS
+# ============================================================================
+
+# Seuils CO2 par défaut :
+#   Vert (#44b544)   : Excellent (< 800 ppm)
+#   Jaune (#f4d03f)  : Bon (800-1000 ppm)
+#   Orange (#ff9800) : Moyen (1000-1500 ppm)
+#   Rouge (#e74c3c)  : Mauvais (> 1500 ppm)
+
+# Pour un thème sombre :
+#   Vert : #2ecc71
+#   Jaune : #f39c12
+#   Orange : #e67e22
+#   Rouge : #c0392b
+
+# ============================================================================
+# ALERTES ET AUTOMATISATIONS BONUS
+# ============================================================================
+
+# Ajouter dans configuration.yaml pour une alerte CO2 élevé :
+
+# automation:
+#   - alias: "Alerte CO2 élevé - Salon"
+#     trigger:
+#       - platform: numeric_state
+#         entity_id: sensor.co2_sejour
+#         above: 1500
+#         for:
+#           minutes: 5
+#     action:
+#       - service: notify.notify
+#         data:
+#           title: "⚠️ CO2 élevé dans le salon"
+#           message: "Le niveau de CO2 est de {{ states('sensor.co2_sejour') }} ppm. Pensez à aérer !"
+#       - service: persistent_notification.create
+#         data:
+#           title: "Qualité de l'air"
+#           message: "CO2 à {{ states('sensor.co2_sejour') }} ppm - Aération recommandée"
+#           notification_id: "co2_alert"
+
+# ============================================================================
+# SUPPORT ET DOCUMENTATION
+# ============================================================================
+
+# Documentation Home Assistant :
+#   - Cartes : https://www.home-assistant.io/dashboards/cards/
+#   - HACS : https://hacs.xyz/
+
+# Cartes personnalisées :
+#   - Mini Graph Card : https://github.com/kalkih/mini-graph-card
+#   - Mushroom Cards : https://github.com/piitaya/lovelace-mushroom
+#   - ApexCharts : https://github.com/RomRider/apexcharts-card
+
+# Projet GitHub :
+#   https://github.com/laurab-git/air-analyzer

@@ -233,10 +233,10 @@ pio run --target upload --upload-port air-analyzer.local
 **RÈGLE IMPORTANTE**: Les fichiers suivants ne doivent JAMAIS être committés sur Git :
 
 1. **secrets.h** - Contient identifiants WiFi, MQTT, OTA (déjà dans .gitignore)
-2. **homeassistant*.yaml** - Configurations Home Assistant spécifiques à l'utilisateur
-3. **homeassistant*.md** - Documentation Home Assistant personnalisée
 
-**Raison**: Ces fichiers contiennent des configurations spécifiques à chaque installation et ne font pas partie du firmware ESP32. Ils sont fournis comme exemples/templates pour l'utilisateur final mais ne doivent pas être versionnés dans le dépôt du projet.
+**Raison**: Ce fichier contient des identifiants sensibles (mots de passe WiFi, MQTT, OTA) qui ne doivent pas être exposés publiquement.
+
+**Note**: Les fichiers `homeassistant_dashboard.yaml` PEUVENT être committés car ils servent d'exemples/templates pour les utilisateurs du projet. Ils contiennent uniquement des noms d'entités génériques (sensor.co2_sejour, etc.) sans informations sensibles.
 
 ## Modification du code
 
