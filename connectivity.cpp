@@ -39,15 +39,15 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
     if (message == "auto") {
       Serial.println("MQTT: Passage en mode AUTO");
       setDisplayMode(DISPLAY_MODE_AUTO);
-      mqttClient.publish("air_analyzer/display/mode", "auto", true);
+      publishDisplayState();
     } else if (message == "manual") {
       Serial.println("MQTT: Passage en mode MANUAL");
       setDisplayMode(DISPLAY_MODE_MANUAL);
-      mqttClient.publish("air_analyzer/display/mode", "manual", true);
+      publishDisplayState();
     } else if (message == "off") {
       Serial.println("MQTT: Passage en mode OFF");
       setDisplayMode(DISPLAY_MODE_OFF);
-      mqttClient.publish("air_analyzer/display/mode", "off", true);
+      publishDisplayState();
     }
   }
   else if (strcmp(topic, "air_analyzer/display/brightness/set") == 0) {
@@ -66,25 +66,26 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
     }
     Serial.printf("MQTT: Luminosité -> %d\n", (int)level);
     setDisplayBrightness(level);
-    mqttClient.publish("air_analyzer/display/brightness", String((int)level).c_str(), true);
+    // Republier l'état complet (qui convertit en texte)
+    publishDisplayState();
   }
   else if (strcmp(topic, "air_analyzer/display/power/set") == 0) {
     if (message == "on" || message == "1") {
       Serial.println("MQTT: Power ON demandé");
       if (getDisplayMode() == DISPLAY_MODE_MANUAL && !isDisplayPoweredOn()) {
         toggleDisplayPower();
+        publishDisplayState();
       } else if (getDisplayMode() != DISPLAY_MODE_MANUAL) {
         Serial.println("MQTT: Impossible - pas en mode MANUAL");
       }
-      mqttClient.publish("air_analyzer/display/power", "on", true);
     } else if (message == "off" || message == "0") {
       Serial.println("MQTT: Power OFF demandé");
       if (getDisplayMode() == DISPLAY_MODE_MANUAL && isDisplayPoweredOn()) {
         toggleDisplayPower();
+        publishDisplayState();
       } else if (getDisplayMode() != DISPLAY_MODE_MANUAL) {
         Serial.println("MQTT: Impossible - pas en mode MANUAL");
       }
-      mqttClient.publish("air_analyzer/display/power", "off", true);
     }
   }
 }
@@ -213,12 +214,8 @@ void handleMQTT() {
         mqttClient.subscribe("air_analyzer/display/brightness/set");
         mqttClient.subscribe("air_analyzer/display/power/set");
 
-        // Publication de l'état initial
-        const char* modeStr = (getDisplayMode() == DISPLAY_MODE_AUTO) ? "auto" :
-                              (getDisplayMode() == DISPLAY_MODE_MANUAL) ? "manual" : "off";
-        mqttClient.publish("air_analyzer/display/mode", modeStr, true);
-        mqttClient.publish("air_analyzer/display/brightness", String((int)getDisplayBrightness()).c_str(), true);
-        mqttClient.publish("air_analyzer/display/power", isDisplayPoweredOn() ? "on" : "off", true);
+        // Publication de l'état initial via la fonction dédiée
+        publishDisplayState();
       } else {
         int state = mqttClient.state();
         Serial.printf("échec rc=%d%s\n", state,
@@ -251,7 +248,17 @@ void publishDisplayState() {
     const char* modeStr = (getDisplayMode() == DISPLAY_MODE_AUTO) ? "auto" :
                           (getDisplayMode() == DISPLAY_MODE_MANUAL) ? "manual" : "off";
     mqttClient.publish("air_analyzer/display/mode", modeStr, true);
-    mqttClient.publish("air_analyzer/display/brightness", String((int)getDisplayBrightness()).c_str(), true);
+
+    // Convertir la luminosité en texte pour Home Assistant
+    BrightnessLevel currentBright = getDisplayBrightness();
+    const char* brightStr;
+    if (currentBright <= BRIGHTNESS_OFF) brightStr = "off";
+    else if (currentBright <= BRIGHTNESS_NIGHT) brightStr = "night";
+    else if (currentBright <= BRIGHTNESS_LOW) brightStr = "low";
+    else if (currentBright <= BRIGHTNESS_MED) brightStr = "med";
+    else brightStr = "high";
+
+    mqttClient.publish("air_analyzer/display/brightness", brightStr, true);
     mqttClient.publish("air_analyzer/display/power", isDisplayPoweredOn() ? "on" : "off", true);
   }
 }
