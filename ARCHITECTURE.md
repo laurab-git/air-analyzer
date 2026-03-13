@@ -508,4 +508,4 @@ display.cpp/h ──────────────────> [Aucune d�
 
 ## Auteur
 
-Laurent B. - 2026
+Laurent R. - 2026

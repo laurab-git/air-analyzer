@@ -267,7 +267,7 @@ Le système utilise un watchdog de 60 secondes pour :
 
 ## Auteur
 
-Laurent B. - 2026
+Laurent R. - 2026
 
 ## Licence
 

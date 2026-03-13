@@ -280,4 +280,4 @@ Si < 120 KB, envisager d'optimiser ou supprimer des features.
 
 ## Auteur
 
-Laurent B. - 2026
+Laurent R. - 2026
