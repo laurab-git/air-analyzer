@@ -31,7 +31,7 @@
 
 ### Test 1 : Vérifier les logs au démarrage (via USB)
 ```
-Bouton initialisé sur GPIO 8, état: HIGH (non appuyé)
+Bouton initialisé sur GPIO 9, état: HIGH (non appuyé)
 ```
 
 ### Test 2 : Tester le bouton physique
@@ -49,26 +49,23 @@ Bouton initialisé sur GPIO 8, état: HIGH (non appuyé)
 2. Attendre 5 secondes → La vue NE devrait PAS revenir automatiquement
 3. Attendre le timeout → La vue devrait alors passer à la suivante dans le cycle
 
-## GPIO alternatifs si GPIO 8 ne fonctionne pas
+## GPIO alternatifs si GPIO 9 ne fonctionne pas
 
-Si le GPIO 8 pose problème (conflit avec boot button), voici des alternatives :
+La configuration actuelle utilise GPIO 9 (`BUTTON_PIN 9` dans `config.h`). GPIO 8 est un strapping pin ESP32-C3 qui peut causer des conflits au boot — ne pas l'utiliser.
 
-### Option 1 : GPIO 9
-```cpp
-#define BUTTON_PIN 9
-```
+Si GPIO 9 pose problème, voici des alternatives :
 
-### Option 2 : GPIO 18
+### Option 1 : GPIO 18
 ```cpp
 #define BUTTON_PIN 18
 ```
 
-### Option 3 : GPIO 19
+### Option 2 : GPIO 19
 ```cpp
 #define BUTTON_PIN 19
 ```
 
-**À NE PAS UTILISER** : GPIO 10-17 (réservés pour le flash SPI)
+**À NE PAS UTILISER** : GPIO 8 (strapping pin, conflit au boot), GPIO 10-17 (réservés pour le flash SPI)
 
 ## Checklist de déploiement
 
@@ -88,7 +85,7 @@ Si le GPIO 8 pose problème (conflit avec boot button), voici des alternatives :
 2. **Vérifiez MQTT** : Dans Home Assistant → Outils dev → MQTT → S'abonner à `air_analyzer/#`
 3. **Testez manuellement** : Publiez sur `air_analyzer/display/mode/set` avec payload `manual`
 4. **Vérifiez le bouton** : Le log montre-t-il "HIGH" ou "LOW" au démarrage ?
-5. **GPIO alternatif** : Si le bouton ne répond pas, essayez GPIO 9 ou 18
+5. **GPIO alternatif** : Si le bouton ne répond pas, essayez GPIO 18 ou 19
 
 ## Temps de réponse attendus
 

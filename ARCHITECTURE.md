@@ -52,7 +52,7 @@ Documentation détaillée de l'architecture du firmware pour développeurs et ag
        ├─> [OTA in progress?] ──YES──> handleOTA() only ──> return
        │                         NO
        ├─> feedWatchdog() ───────────> Reset timer 60s
-       ├─> updateTime() ─────────────> Sync NTP (1x/jour)
+       ├─> updateTime() ─────────────> getLocalTime() (chaque loop, timeout 500ms)
        │
        ├─> handleWiFiReconnect() ────> Check & reconnect WiFi
        │
@@ -76,11 +76,11 @@ Documentation détaillée de l'architecture du firmware pour développeurs et ag
        │           ├─ Mode AUTO ─────> getAutoBrightness() selon heure
        │           ├─ Mode MANUAL ───> Utiliser manualBrightness/Power
        │           │
-       │           └─> Cycle de vues (4 vues possibles)
-       │                 ├─ Vue 0: Valeurs actuelles (10s)
-       │                 ├─ Vue 1: Extrêmes nuit (5s)
-       │                 ├─ Vue 2: Extrêmes jour (5s)
-       │                 └─ Vue 3: Météo (5s)
+       │           └─> Cycle de vues (selon données disponibles)
+       │                 ├─ Vue 0: Valeurs actuelles (10s)  [toujours]
+       │                 ├─ Vue 3: Météo (5s)               [si hasWeatherData()]
+       │                 ├─ Vue 1: Extrêmes nuit (5s)       [si hasNightData()]
+       │                 └─ Vue 2: Extrêmes jour (5s)       [si hasDayData()]
        │
        ├─> handleWeatherFetch() ─────> Toutes les heures
        │     │
@@ -120,12 +120,12 @@ IDLE ──[press]──> PRESSED ──[hold 1s]──> LONG_PRESS
 
 **Variables d'état**:
 ```cpp
-static unsigned long lastDebounceTime = 0;
+static unsigned long lastPressTime = 0;
 static unsigned long pressStartTime = 0;
-static unsigned long releaseTime = 0;
-static bool lastButtonState = HIGH;
-static bool buttonState = HIGH;
-static ButtonState state = BUTTON_STATE_IDLE;
+static unsigned long firstPressTime = 0;
+static bool isPressed = false;
+static bool wasPressed = false;
+static int pressCount = 0;
 ```
 
 **Constantes critiques**:
@@ -184,16 +184,16 @@ BrightnessLevel getAutoBrightness() {
 }
 ```
 
-**Cycle de vues**:
+**Cycle de vues** (ordre d'insertion = ordre d'affichage):
 ```cpp
 // Vues disponibles selon données
-modes[0] = 0;  // Toujours: Valeurs actuelles
-if (hasWeatherData()) modes[n++] = 3;  // Météo
-if (hasNightData() && getNightMaxCO2() > 0) modes[n++] = 1;  // Nuit
-if (hasDayData() && getDayMaxCO2() > 0) modes[n++] = 2;  // Jour
+modes[modeCount++] = 0; // Toujours: Valeurs actuelles
+if (hasWeatherData())                        modes[modeCount++] = 3; // Météo
+if (hasNightData() && getNightMaxCO2() > 0)  modes[modeCount++] = 1; // Nuit
+if (hasDayData()  && getDayMaxCO2() > 0)     modes[modeCount++] = 2; // Jour
 
 // Durées d'affichage
-viewDuration = (mode == 0) ? 10000 : 5000;  // Actuelles: 10s, autres: 5s
+viewDuration = (modes[currentViewIdx] == 0) ? 10000UL : VIEW_CYCLE_MS; // 10s / 5s
 ```
 
 ### Module Connectivity (connectivity.cpp/h)
@@ -258,7 +258,7 @@ void publishDisplayState() {
    - esp_task_wdt_delete(NULL)  // Désactiver watchdog
    - mqttClient.disconnect()    // Libérer mémoire
    - stopSensor()               // Libérer mémoire
-3. onProgress(): Afficher % tous les 10%
+3. onProgress(): Afficher chaque nouveau % (log série)
 4. onEnd(): Reboot automatique
 5. onError(): Afficher erreur + ESP.restart()
 ```
@@ -269,9 +269,11 @@ void publishDisplayState() {
 
 **Séquence de lecture** (toutes les 5 minutes):
 ```cpp
-1. scd4x.readMeasurement(co2, temp, hum)
-2. if (co2 == 0) → Ignore (capteur pas prêt)
-3. temp -= TEMP_OFFSET  // Calibration -1.7°C
+// Au boot : retry toutes les 5s jusqu'à la première mesure valide
+// Ensuite : intervalle normal de 5 min
+1. scd4x.getDataReadyFlag(ready)
+2. if (!ready) → Reporte de 5s (en rythme normal)
+3. scd4x.readMeasurement(co2, temp, hum)
 4. lastCO2 = co2, lastTemp = temp, lastHum = hum
 5. updateStats(co2, temp, hum)  // Min/max jour/nuit
 6. publishSensorData(co2, temp, hum)  // MQTT
@@ -279,28 +281,37 @@ void publishDisplayState() {
 
 **Calibration température**:
 ```cpp
-#define TEMP_OFFSET -1.0f  // SCD40 lit ~1.0°C trop froid
-// Raison: Environnement du capteur et éloignement de l'ESP32
-// Offset négatif = le capteur ajoute cette valeur
+// Dans initSensor() — l'offset est appliqué directement dans le SCD40
+#define TEMP_OFFSET -1.0f  // Correction offset thermique (°C)
+scd4x.setTemperatureOffset(TEMP_OFFSET);
+// Calibré : SCD40 affichait 18.1°C pour 20.8°C réel
 ```
 
 ### Module Stats (stats.cpp/h)
 
 **Responsabilité**: Calcul min/max jour/nuit
 
-**Logique de réinitialisation**:
+**Stockage**: Variables `RTC_DATA_ATTR` persistantes après reboot logiciel.
+
+**Périodes**:
+- **Nuit** : 23h30–7h00 (même définition que l'AUTO brightness)
+- **Jour** : 7h00–23h30
+
+**Logique de réinitialisation** (détection de changement d'heure via `lastResetHour`):
 ```cpp
-// Reset à 7h00 (début de journée)
-if (current_hour == 7 && !dayResetDone) {
-  resetDayStats();
-  dayResetDone = true;
+// Reset au début de la nuit (heure 23)
+if (currentHour == 23 && lastResetHour != 23) {
+  nightMaxCO2 = co2; nightMinTemp = t; nightMaxHum = h;
+  nightDataAvail = true;
 }
 
-// Reset à 22h00 (début de nuit)
-if (current_hour == 22 && !nightResetDone) {
-  resetNightStats();
-  nightResetDone = true;
+// Reset au début du jour (heure 7)
+if (currentHour == 7 && lastResetHour != 7) {
+  dayMaxCO2 = co2; dayMinTemp = t; dayMaxHum = h;
+  dayDataAvail = true;
 }
+
+lastResetHour = currentHour;
 ```
 
 ### Module Utils (utils.cpp/h)
@@ -310,12 +321,8 @@ if (current_hour == 22 && !nightResetDone) {
 **Watchdog**:
 ```cpp
 void initWatchdog() {
-  esp_task_wdt_config_t config = {
-    .timeout_ms = WDT_TIMEOUT_S * 1000,  // 60s
-    .idle_core_mask = 0,
-    .trigger_panic = true
-  };
-  esp_task_wdt_init(&config);
+  esp_task_wdt_deinit();                  // Désactiver le watchdog par défaut
+  esp_task_wdt_init(WDT_TIMEOUT_S, true); // timeout en secondes, trigger_panic = true
   esp_task_wdt_add(NULL);
 }
 
@@ -324,15 +331,10 @@ void feedWatchdog() {
 }
 ```
 
-**NTP Time sync**:
+**NTP Time sync** (appelé à chaque loop, timeout 500ms pour ne pas bloquer):
 ```cpp
 void updateTime() {
-  static unsigned long lastTimeUpdate = 0;
-  if (millis() - lastTimeUpdate >= 86400000) {  // 1x par jour
-    if (getLocalTime(&g_timeinfo)) {
-      g_timeValid = true;
-    }
-  }
+  g_timeValid = getLocalTime(&g_timeinfo, 500);
 }
 ```
 
@@ -342,26 +344,26 @@ void updateTime() {
 
 **API utilisée**: Open-Meteo (gratuit, sans clé)
 ```
-GET https://api.open-meteo.com/v1/forecast?
-    latitude=XX.XX&longitude=XX.XX&
-    daily=weathercode,temperature_2m_max,temperature_2m_min&
-    timezone=auto&forecast_days=2
+GET http://api.open-meteo.com/v1/forecast?
+    latitude=XX.XXXX&longitude=XX.XXXX&
+    daily=weather_code,temperature_2m_max,temperature_2m_min&
+    timezone=Europe%2FParis
 ```
 
-**Parsing JSON**:
+**Parsing JSON** (ArduinoJson v7):
 ```cpp
-StaticJsonDocument<2048> doc;
-deserializeJson(doc, httpClient.getString());
+JsonDocument doc;
+deserializeJson(doc, http.getString());
 
-weatherCode = doc["daily"]["weathercode"][day];
-weatherMaxTemp = doc["daily"]["temperature_2m_max"][day];
-weatherMinTemp = doc["daily"]["temperature_2m_min"][day];
+weatherCode = doc["daily"]["weather_code"][dayIndex];
+weatherMaxTemp = doc["daily"]["temperature_2m_max"][dayIndex];
+weatherMinTemp = doc["daily"]["temperature_2m_min"][dayIndex];
 ```
 
 **Sélection jour**:
 ```cpp
-// Si après 18h, afficher demain
-int day = (g_timeinfo.tm_hour >= 18) ? 1 : 0;
+// Si après 17h, afficher demain
+int dayIndex = (g_timeinfo.tm_hour >= 17) ? 1 : 0;
 ```
 
 ## Gestion de la mémoire
@@ -379,7 +381,7 @@ static SensirionI2CScd4x scd4x;
 **Dynamique** (limité):
 ```cpp
 String message = "";  // Uniquement dans callbacks courts
-StaticJsonDocument<2048> doc;  // Taille fixe, pas de fragmentation
+JsonDocument doc;     // ArduinoJson v7, allocation automatique
 ```
 
 ### Heap monitoring

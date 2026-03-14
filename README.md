@@ -175,16 +175,16 @@ L'écran affiche 4 types de vues en rotation automatique :
    - Température et humidité
    - Jauge visuelle de qualité de l'air
 
-2. **Extrêmes de la nuit** (5 secondes)
-   - Max CO2, Min température, Max humidité
-
-3. **Extrêmes du jour** (5 secondes)
-   - Max CO2, Min température, Max humidité
-
-4. **Météo** (5 secondes)
-   - Prévisions aujourd'hui ou demain
+2. **Météo** (5 secondes) — si données disponibles
+   - Prévisions aujourd'hui ou demain (bascule après 17h)
    - Températures min/max
    - Icône météo
+
+3. **Extrêmes de la nuit** (5 secondes) — si données disponibles
+   - Max CO2, Min température, Max humidité
+
+4. **Extrêmes du jour** (5 secondes) — si données disponibles
+   - Max CO2, Min température, Max humidité
 
 ## Seuils de qualité de l'air (CO2)
 
