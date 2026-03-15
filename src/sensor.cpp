@@ -3,6 +3,7 @@
 #include "config.h"
 #include "stats.h"
 #include "connectivity.h"
+#include "aci.h"
 #include <Wire.h>
 #include <SensirionI2CScd4x.h>
 
@@ -68,7 +69,9 @@ void handleSensorRead() {
         dataValid = true;
 
         updateStats(co2, temp, hum);
+        updateACI(co2, temp, hum);
         publishSensorData(co2, temp, hum);
+        publishACIData();
       }
     } else if (!sensorBootWait) {
       // En rythme normal, si le capteur n'est pas prêt on reporte de 5s

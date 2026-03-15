@@ -4,6 +4,7 @@
 #include "sensor.h"
 #include "display.h"
 #include "utils.h"
+#include "aci.h"
 #include <Arduino.h>
 #include <ArduinoOTA.h>
 #include <PubSubClient.h>
@@ -260,6 +261,29 @@ void publishDisplayState() {
     mqttClient.publish("air_analyzer/display/brightness", brightStr, true);
     mqttClient.publish("air_analyzer/display/power", isDisplayPoweredOn() ? "on" : "off", true);
   }
+}
+
+void publishACIData() {
+  if (!mqttClient.connected() || !hasACIData()) return;
+
+  char buf[8];
+
+  snprintf(buf, sizeof(buf), "%d", (int)getACIScore());
+  mqttClient.publish("air_analyzer/aci/score", buf, true);
+
+  mqttClient.publish("air_analyzer/aci/label", getACILabel(), true);
+
+  snprintf(buf, sizeof(buf), "%d", (int)getACICO2Score());
+  mqttClient.publish("air_analyzer/aci/co2_score", buf, true);
+
+  snprintf(buf, sizeof(buf), "%d", (int)getACITempScore());
+  mqttClient.publish("air_analyzer/aci/temp_score", buf, true);
+
+  snprintf(buf, sizeof(buf), "%d", (int)getACIHumScore());
+  mqttClient.publish("air_analyzer/aci/hum_score", buf, true);
+
+  Serial.printf("MQTT ACI publié: score=%d label=%s\n",
+                (int)getACIScore(), getACILabel());
 }
 
 // ============================================================

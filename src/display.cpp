@@ -5,6 +5,7 @@
 #include "sensor.h"
 #include "stats.h"
 #include "weather.h"
+#include "aci.h"
 #include "version.h"
 #include <SPI.h>
 #include <Adafruit_GFX.h>
@@ -45,6 +46,9 @@ static void updateDisplayCycle();
 static void displayUI(uint16_t co2, float t, float h, const char *label);
 static void displayWeatherUI(uint8_t code, float maxT, float minT, bool tomorrow);
 static void drawWeatherIcon(uint8_t code, int x, int y);
+static void displayACIUI();
+static uint16_t aciSubColor(float v);
+static void drawACISubScore(int x, int y, const char* name, float val, uint16_t color);
 
 // ============================================================
 // --- INITIALISATION ---
@@ -204,9 +208,10 @@ static void updateDisplayCycle() {
   }
 
   // Cycle des vues (valeurs actuelles: 10s, autres: 5s)
-  int modes[4];
+  int modes[5];
   int modeCount = 0;
   modes[modeCount++] = 0; // Valeurs actuelles
+  modes[modeCount++] = 4; // ACI - Indice de confort (toujours dispo si hasValidData)
   if (hasWeatherData())
     modes[modeCount++] = 3;
   if (hasNightData() && getNightMaxCO2() > 0)
@@ -239,6 +244,9 @@ static void updateDisplayCycle() {
   case 3:
     displayWeatherUI(getWeatherCode(), getWeatherMaxTemp(), getWeatherMinTemp(),
                      isWeatherForTomorrow());
+    break;
+  case 4:
+    displayACIUI();
     break;
   }
 }
@@ -438,6 +446,186 @@ static void displayWeatherUI(uint8_t code, float maxT, float minT, bool tomorrow
 }
 
 // ============================================================
+// --- COULEUR D'UN SOUS-SCORE ACI ---
+// ============================================================
+static uint16_t aciSubColor(float v) {
+  if (v >= 80.0f) return ST77XX_GREEN;
+  if (v >= 60.0f) return 0xAFE0;         // Vert-jaune
+  if (v >= 40.0f) return ST77XX_YELLOW;
+  if (v >= 20.0f) return 0xFD20;         // Orange
+  return ST77XX_RED;
+}
+
+// ============================================================
+// --- BARRE DE SOUS-SCORE ACI (50px de large) ---
+// ============================================================
+static void drawACISubScore(int x, int y, const char* name, float val, uint16_t color) {
+  tft.fillRect(x, y, 50, 22, ST77XX_BLACK);
+  // Label
+  tft.setTextSize(1);
+  tft.setTextColor(0x7BEF, ST77XX_BLACK);
+  tft.setCursor(x, y);
+  tft.print(name);
+  // Barre fond + remplissage
+  tft.fillRect(x, y + 10, 50, 5, 0x2104);
+  int fill = (int)(val * 50.0f / 100.0f);
+  if (fill > 0) tft.fillRect(x, y + 10, fill, 5, color);
+  // Valeur en %
+  tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
+  char buf[6];
+  snprintf(buf, sizeof(buf), "%d%%", (int)val);
+  tft.setCursor(x, y + 17);
+  tft.print(buf);
+}
+
+// ============================================================
+// --- VUE ACI : JAUGE ARC + SOUS-SCORES ---
+//
+// Layout (320×170, paysage) :
+//   y=0-19  : En-tête "CONFORT AIR" + heure
+//   y=20    : Ligne de séparation
+//   y=22-169: Arc semi-circulaire (cx=160, cy=172, r=100-125)
+//             Score (taille 4) + label (taille 2) au centre de l'arc
+//             3 barres sous-scores en bas de l'arc (y=148-169)
+//
+// Gradient arc : rouge (gauche=0) → vert (droite=100)
+// La portion remplie correspond au score, le reste en gris foncé.
+// ============================================================
+static void displayACIUI() {
+  static float lastScore = -1.0f;
+  static float lastCO2s  = -1.0f;
+  static float lastTemps = -1.0f;
+  static float lastHums  = -1.0f;
+
+  if (!hasACIData()) return;
+
+  float score = getACIScore();
+  float co2s  = getACICO2Score();
+  float temps = getACITempScore();
+  float hums  = getACIHumScore();
+
+  bool labelChanged = (strcmp("CONFORT AIR", currentScreenLabel) != 0);
+  bool scoreChanged = labelChanged || (fabsf(score - lastScore) >= 0.5f);
+  bool subChanged   = scoreChanged
+                    || fabsf(co2s  - lastCO2s)  >= 0.5f
+                    || fabsf(temps - lastTemps) >= 0.5f
+                    || fabsf(hums  - lastHums)  >= 0.5f;
+  bool timeChanged  = g_timeValid && (g_timeinfo.tm_min != lastDisplayMinute);
+
+  if (!labelChanged && !scoreChanged && !subChanged && !timeChanged) return;
+
+  if (labelChanged) {
+    tft.fillScreen(ST77XX_BLACK);
+    strncpy(currentScreenLabel, "CONFORT AIR", sizeof(currentScreenLabel));
+    lastDisplayMinute = -1;
+    timeChanged = true;
+  }
+
+  // Couleur principale selon le score global
+  uint16_t scoreColor = aciSubColor(score);
+
+  // --- En-tête ---
+  if (labelChanged) {
+    tft.setTextSize(1);
+    tft.setTextColor(0x7BEF, ST77XX_BLACK);
+    tft.setCursor(5, 6);
+    tft.print("CONFORT AIR");
+    tft.drawFastHLine(0, 20, 320, 0x7BEF);
+  }
+
+  // --- Heure ---
+  if (timeChanged) {
+    tft.fillRect(255, 6, 60, 10, ST77XX_BLACK);
+    tft.setTextSize(1);
+    tft.setTextColor(ST77XX_WHITE);
+    tft.setCursor(265, 6);
+    tft.printf("%02d:%02d", g_timeinfo.tm_hour, g_timeinfo.tm_min);
+    lastDisplayMinute = g_timeinfo.tm_min;
+  }
+
+  // --- Arc semi-circulaire ---
+  if (scoreChanged) {
+    const int cx    = 160;
+    const int cy    = 172;   // 2px sous l'écran → le bas de l'arc est invisible
+    const int r_in  = 100;
+    const int r_out = 125;
+    const float filledDeg = score * 1.8f;  // 0-100 → 0-180°
+
+    // Effacer la zone centrale avant de dessiner l'arc (évite le scintillement)
+    tft.fillRect(62, 22, 196, 148, ST77XX_BLACK);
+
+    // Dessin de l'arc pixel par pixel (startWrite/writePixel pour performance)
+    tft.startWrite();
+    for (float deg = 0.0f; deg <= 180.0f; deg += 0.35f) {
+      float rad  = deg * 3.14159f / 180.0f;
+      float cosV = cosf(rad);
+      float sinV = sinf(rad);
+
+      // Gradient rouge→orange→jaune→vert-jaune→vert selon position dans l'arc
+      uint16_t color;
+      if (deg <= filledDeg) {
+        float ratio = deg / 180.0f;
+        if      (ratio < 0.20f) color = ST77XX_RED;
+        else if (ratio < 0.40f) color = 0xFD20;          // Orange
+        else if (ratio < 0.60f) color = ST77XX_YELLOW;
+        else if (ratio < 0.80f) color = 0xAFE0;          // Vert-jaune
+        else                    color = ST77XX_GREEN;
+      } else {
+        color = 0x2104;  // Gris très foncé (portion non remplie)
+      }
+
+      for (int r = r_in; r <= r_out; r++) {
+        int px = cx - (int)((float)r * cosV);
+        int py = cy - (int)((float)r * sinV);
+        if (px >= 0 && px < 320 && py >= 22 && py < 170)
+          tft.writePixel(px, py, color);
+      }
+    }
+    tft.endWrite();
+
+    // Repère blanc à la limite rempli/non-rempli
+    if (score > 1.0f && score < 99.0f) {
+      float nRad = filledDeg * 3.14159f / 180.0f;
+      int nx1 = cx - (int)((r_in  - 5) * cosf(nRad));
+      int ny1 = cy - (int)((r_in  - 5) * sinf(nRad));
+      int nx2 = cx - (int)((r_out + 5) * cosf(nRad));
+      int ny2 = cy - (int)((r_out + 5) * sinf(nRad));
+      if (ny1 < 170 && ny2 < 170)
+        tft.drawLine(nx1, ny1, nx2, ny2, ST77XX_WHITE);
+    }
+
+    // Score (taille 4) centré dans le trou de l'arc (zone r < 100)
+    char buf[5];
+    snprintf(buf, sizeof(buf), "%d", (int)score);
+    int scoreW = strlen(buf) * 24;  // textSize=4 : 6px×4=24 par caractère
+    tft.setTextSize(4);
+    tft.setTextColor(scoreColor, ST77XX_BLACK);
+    tft.setCursor(160 - scoreW / 2, 90);
+    tft.print(buf);
+
+    // Label (taille 2) sous le score
+    const char* lbl = getACILabel();
+    int lblW = strlen(lbl) * 12;  // textSize=2 : 6px×2=12 par caractère
+    tft.setTextSize(2);
+    tft.setTextColor(scoreColor, ST77XX_BLACK);
+    tft.setCursor(160 - lblW / 2, 128);
+    tft.print(lbl);
+
+    lastScore = score;
+  }
+
+  // --- Sous-scores CO2 / Temp / Hum ---
+  if (subChanged) {
+    drawACISubScore(67,  148, "CO2", co2s,  aciSubColor(co2s));
+    drawACISubScore(135, 148, "TMP", temps, aciSubColor(temps));
+    drawACISubScore(203, 148, "HUM", hums,  aciSubColor(hums));
+    lastCO2s  = co2s;
+    lastTemps = temps;
+    lastHums  = hums;
+  }
+}
+
+// ============================================================
 // --- API PUBLIQUE : CONTRÔLE DES MODES ---
 // ============================================================
 void setDisplayMode(DisplayMode mode) {
@@ -490,9 +678,10 @@ void nextDisplayView() {
   // Les variables sont partagées au niveau du fichier
 
   // Récupérer les modes disponibles (même logique que dans updateDisplayCycle)
-  int modes[4];
+  int modes[5];
   int modeCount = 0;
   modes[modeCount++] = 0; // Valeurs actuelles
+  modes[modeCount++] = 4; // ACI - Indice de confort
   if (hasWeatherData())
     modes[modeCount++] = 3;
   if (hasNightData() && getNightMaxCO2() > 0)
@@ -517,6 +706,9 @@ void nextDisplayView() {
   case 3:
     displayWeatherUI(getWeatherCode(), getWeatherMaxTemp(), getWeatherMinTemp(),
                      isWeatherForTomorrow());
+    break;
+  case 4:
+    displayACIUI();
     break;
   }
 }
